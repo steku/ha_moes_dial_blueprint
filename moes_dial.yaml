@@ -13,6 +13,14 @@ blueprint:
     mqtt_topic:
       name: Device specific MQTT topic
       description: Topic that the Moes dial publishes to
+    step_value:
+      name: Step Value
+      description: Used for configuring percentage of each step for brightness and color temperature
+      default: 5
+      selector:
+        number:
+          min: 1
+          max: 100
 
 trigger:
   - platform: mqtt
@@ -25,7 +33,7 @@ action:
       light_temp: "{{ state_attr(target_light, 'color_temp') }}"
       brigtness_step: 13
       temperature_step: 18
-      pct_change: 5
+      pct_change: !input step_value
       temp_pct_change: >-
         {{ ((state_attr(target_light, 'max_mireds') -
         state_attr(target_light, 'min_mireds')) /100 ) * pct_change }}
