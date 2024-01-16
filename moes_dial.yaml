@@ -1,0 +1,82 @@
+blueprint:
+  name: Moes Dial Automation
+  description: Turn a light on based on detected motion
+  domain: automation
+  input:
+    target_light:
+      name: Lights
+      description: The light(s) with Mireds
+      selector:
+        entity:
+          filter:
+            - domain: light
+    mqtt_topic:
+      name: Device specific MQTT topic
+      description: Topic that the Moes dial publishes to
+
+trigger:
+  - platform: mqtt
+    topic: !input mqtt_topic
+action:
+  - variables:
+      command: "{{ trigger.payload_json.action }}"
+      size: "{{ trigger.payload_json.action_step_size }}"
+      target_light: !input target_light
+      light_temp: "{{ state_attr(target_light, 'color_temp') }}"
+      brigtness_step: 13
+      temperature_step: 18
+      pct_change: 5
+      temp_pct_change: >-
+        {{ ((state_attr(target_light, 'max_mireds') -
+        state_attr(target_light, 'min_mireds')) /100 ) * pct_change }}
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: "{{ trigger.payload_json.action == 'toggle' }}"
+        sequence:
+          - service: light.toggle
+            entity_id: !input target_light
+      - conditions:
+          - condition: template
+            value_template: "{{ command == 'brightness_step_up' }}"
+        sequence:
+          - service: light.turn_on
+            data:
+              brightness_step_pct: "{{ pct_change * (size / brigtness_step) }}"
+            target:
+              entity_id: !input target_light
+      - conditions:
+          - condition: template
+            value_template: "{{ command == 'brightness_step_down'  }}"
+        sequence:
+          - service: light.turn_on
+            data:
+              brightness_step_pct: "{{ -pct_change * (size / brigtness_step) }}"
+            target:
+              entity_id: !input target_light
+      - conditions:
+          - condition: template
+            value_template: "{{ command == 'color_temperature_step_down'  }}"
+        sequence:
+          - service: light.turn_on
+            metadata: {}
+            data:
+              color_temp: >-
+                {{ light_temp + (-temp_pct_change * (size / temperature_step)) |
+                int }}
+            target:
+              entity_id: !input target_light
+      - conditions:
+          - condition: template
+            value_template: "{{ command == 'color_temperature_step_up' }} "
+        sequence:
+          - service: light.turn_on
+            metadata: {}
+            data:
+              color_temp: >-
+                {{ light_temp + (temp_pct_change * (size / temperature_step)) |
+                int }}
+            target:
+              entity_id: !input target_light
+mode: single
+max_exceeded: silent
