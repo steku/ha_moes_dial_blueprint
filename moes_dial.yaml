@@ -21,6 +21,27 @@ blueprint:
         number:
           min: 1
           max: 100
+    cercadian_controller:
+      name: Cercadian Controller
+      description: Cercadian controller to disable if the dial is used. Keep enabled if only turning on or off.
+      selector:
+        entity:
+      default:
+    min_mireds:
+      description: Minimum mireds value.
+      selector:
+        color_temp:
+      default: 154
+      name: Min Mireds
+    max_mireds:
+      description: >-
+        Maximum mireds value. This is the start value. If the light is on the
+        current value from the state of the light will be used and this will be
+        ignored.
+      selector:
+        color_temp:
+      default: 400
+      name: Max Mireds
 
 trigger:
   - platform: mqtt
@@ -30,13 +51,15 @@ action:
       command: "{{ trigger.payload_json.action }}"
       size: "{{ trigger.payload_json.action_step_size }}"
       target_light: !input target_light
+      max_mireds: !input max_mireds
+      min_mireds: !input min_mireds
       light_temp: "{{ state_attr(target_light, 'color_temp') }}"
       brigtness_step: 13
       temperature_step: 18
       pct_change: !input step_value
       temp_pct_change: >-
-        {{ ((state_attr(target_light, 'max_mireds') -
-        state_attr(target_light, 'min_mireds')) /100 ) * pct_change }}
+        {{ ((max_mireds - min_mireds) / 100 ) * pct_change }}
+      cercadian_controller: !input cercadian_controller
   - choose:
       - conditions:
           - condition: template
@@ -48,6 +71,13 @@ action:
           - condition: template
             value_template: "{{ command == 'brightness_step_up' }}"
         sequence:
+          - if: "{{ cercadian_controller != '' }}"
+            then:
+              - service: switch.turn_off
+                metadata: {}
+                data: {}
+                target:
+                  entity_id: !input cercadian_controller
           - service: light.turn_on
             data:
               brightness_step_pct: "{{ pct_change * (size / brigtness_step) }}"
@@ -57,33 +87,68 @@ action:
           - condition: template
             value_template: "{{ command == 'brightness_step_down'  }}"
         sequence:
-          - service: light.turn_on
-            data:
-              brightness_step_pct: "{{ -pct_change * (size / brigtness_step) }}"
-            target:
-              entity_id: !input target_light
+          - if: "{{ cercadian_controller != '' }}"
+            then:
+              - service: switch.turn_off
+                metadata: {}
+                data: {}
+                target:
+                  entity_id: !input cercadian_controller
+          - if: "{{ (-pct_change * (size / brigtness_step)) > 1 }}"
+            then:
+              - service: light.turn_on
+                data:
+                  brightness_step_pct: "{{ -pct_change * (size / brigtness_step) }}"
+                target:
+                  entity_id: !input target_light
+            else:
+              - service: light.turn_on
+                data:
+                  brightness: "1"
+                target:
+                  entity_id: !input target_light
       - conditions:
           - condition: template
             value_template: "{{ command == 'color_temperature_step_down'  }}"
         sequence:
+          - if: "{{ cercadian_controller != '' }}"
+            then:
+              - service: switch.turn_off
+                metadata: {}
+                data: {}
+                target:
+                  entity_id: !input cercadian_controller
           - service: light.turn_on
             metadata: {}
             data:
               color_temp: >-
-                {{ light_temp + (-temp_pct_change * (size / temperature_step)) |
-                int }}
+                {% if light_temp != None %}
+                {{ light_temp + (-temp_pct_change * (size / temperature_step)) | int }}
+                {% else %}
+                {{ 275 + (-temp_pct_change * (size / temperature_step)) | int }}
+                {% endif %}
             target:
               entity_id: !input target_light
       - conditions:
           - condition: template
             value_template: "{{ command == 'color_temperature_step_up' }} "
         sequence:
+          - if: "{{ cercadian_controller != '' }}"
+            then:
+              - service: switch.turn_off
+                metadata: {}
+                data: {}
+                target:
+                  entity_id: !input cercadian_controller
           - service: light.turn_on
             metadata: {}
             data:
               color_temp: >-
-                {{ light_temp + (temp_pct_change * (size / temperature_step)) |
-                int }}
+                {% if light_temp != None %}
+                {{ light_temp + (temp_pct_change * (size / temperature_step)) | int }}
+                {% else %}
+                {{ 275 + (temp_pct_change * (size / temperature_step)) | int }}
+                {% endif %}
             target:
               entity_id: !input target_light
 mode: single
