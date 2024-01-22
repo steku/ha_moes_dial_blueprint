@@ -28,16 +28,14 @@ blueprint:
         entity:
       default:
     min_mireds:
-      description: Minimum mireds value.
+      description: Minimum mireds value (coldest)
       selector:
         color_temp:
       default: 154
       name: Min Mireds
     max_mireds:
       description: >-
-        Maximum mireds value. This is the start value. If the light is on the
-        current value from the state of the light will be used and this will be
-        ignored.
+        Maximum mireds value (warmest)
       selector:
         color_temp:
       default: 400
